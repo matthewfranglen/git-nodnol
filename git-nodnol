@@ -1,0 +1,48 @@
+#!/bin/bash
+
+function main () {
+    local original_hash=$(get_current_commit_hash)
+
+    go_to_project_root                           || exit 1
+    create_new_branch                            || exit 1
+    commit_with_copied_metadata ${original_hash} || exit 1
+
+    for commit_hash in $(list_commit_hashes ${original_hash} | delete_last_line)
+    do
+        git diff ${commit_hash} ${commit_hash}~1 | patch --strip=1 --force || exit 1
+        git add --all .                                                    || exit 1
+        commit_with_copied_metadata ${commit_hash}~1                       || exit 1
+    done
+}
+
+function go_to_project_root () {
+    cd $(git rev-parse --show-toplevel)
+}
+
+function get_current_commit_hash () {
+    git log -1 --pretty='%H' HEAD
+}
+
+function list_commit_hashes () {
+    local start_commit=$1
+
+    git log --pretty='%H' ${start_commit}
+}
+
+function delete_last_line () {
+    sed -e '$d'
+}
+
+function create_new_branch () {
+    git checkout --orphan nodnol
+}
+
+function commit_with_copied_metadata () {
+    local source_commit=${1}
+
+    git commit --reuse-message=${source_commit}                        \
+        --author="$(git log -1 --pretty='%an <%ae>' ${source_commit})" \
+        --date="$(git log -1 --pretty='%cd' ${source_commit})"
+}
+
+main
